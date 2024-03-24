@@ -1,4 +1,4 @@
-import { Header, TileType } from '../../js/index';
+import { Header, TileType } from './shared2';
 
 export const pmtiles_path = (name: string, setting?: string): string => {
   if (setting) {
