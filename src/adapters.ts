@@ -4,8 +4,8 @@ declare const L: any;
 declare const window: any;
 declare const document: DocumentLike;
 
-import type { Coords } from "leaflet";
-import { PMTiles, TileType } from "./shared2";
+import type { Coords } from 'leaflet';
+import { PMTiles, TileType } from './shared2';
 
 interface DocumentLike {
   // biome-ignore lint: we don't want to bring in the entire document type
@@ -22,10 +22,10 @@ type DoneCallback = (error?: Error, tile?: any) => void;
  */
 export const leafletRasterLayer = (source: PMTiles, options: unknown) => {
   let loaded = false;
-  let mimeType = "";
+  let mimeType = '';
   const cls = L.GridLayer.extend({
     createTile: (coord: Coords, done: DoneCallback) => {
-      const el = document.createElement("img");
+      const el = document.createElement('img');
       const controller = new AbortController();
       const signal = controller.signal;
       el.cancel = () => {
@@ -35,16 +35,16 @@ export const leafletRasterLayer = (source: PMTiles, options: unknown) => {
         source.getHeader().then((header) => {
           if (header.tileType === TileType.Mvt) {
             console.error(
-              "Error: archive contains MVT vector tiles, but leafletRasterLayer is for displaying raster tiles. See https://github.com/protomaps/PMTiles/tree/main/js for details."
+              'Error: archive contains MVT vector tiles, but leafletRasterLayer is for displaying raster tiles. See https://github.com/protomaps/PMTiles/tree/main/js for details.',
             );
           } else if (header.tileType === 2) {
-            mimeType = "image/png";
+            mimeType = 'image/png';
           } else if (header.tileType === 3) {
-            mimeType = "image/jpeg";
+            mimeType = 'image/jpeg';
           } else if (header.tileType === 4) {
-            mimeType = "image/webp";
+            mimeType = 'image/webp';
           } else if (header.tileType === 5) {
-            mimeType = "image/avif";
+            mimeType = 'image/avif';
           }
         });
         loaded = true;
@@ -61,7 +61,7 @@ export const leafletRasterLayer = (source: PMTiles, options: unknown) => {
           }
         })
         .catch((e) => {
-          if (e.name !== "AbortError") {
+          if (e.name !== 'AbortError') {
             throw e;
           }
         });
@@ -81,7 +81,7 @@ export const leafletRasterLayer = (source: PMTiles, options: unknown) => {
       tile.el.deleted = true;
       L.DomUtil.remove(tile.el);
       delete this._tiles[key];
-      this.fire("tileunload", {
+      this.fire('tileunload', {
         tile: tile.el,
         coords: this._keyToTileCoords(key),
       });
@@ -93,10 +93,7 @@ export const leafletRasterLayer = (source: PMTiles, options: unknown) => {
 type GetResourceResponse<T> = ExpiryData & {
   data: T;
 };
-type AddProtocolAction = (
-  requestParameters: RequestParameters,
-  abortController: AbortController
-) => Promise<GetResourceResponse<unknown>>;
+type AddProtocolAction = (requestParameters: RequestParameters, abortController: AbortController) => Promise<GetResourceResponse<unknown>>;
 
 type ExpiryData = {
   cacheControl?: string | null;
@@ -107,10 +104,10 @@ type ExpiryData = {
 type RequestParameters = {
   url: string;
   headers?: unknown;
-  method?: "GET" | "POST" | "PUT";
+  method?: 'GET' | 'POST' | 'PUT';
   body?: string;
-  type?: "string" | "json" | "arrayBuffer" | "image";
-  credentials?: "same-origin" | "include";
+  type?: 'string' | 'json' | 'arrayBuffer' | 'image';
+  credentials?: 'same-origin' | 'include';
   collectResourceTiming?: boolean;
 };
 
@@ -119,17 +116,15 @@ type ResponseCallbackV3 = (
   error?: Error | undefined,
   data?: unknown | undefined,
   cacheControl?: string | undefined,
-  expires?: string | undefined
+  expires?: string | undefined,
 ) => void;
 
 type V3OrV4Protocol = <
   T extends AbortController | ResponseCallbackV3,
-  R = T extends AbortController
-    ? Promise<GetResourceResponse<unknown>>
-    : { cancel: () => void },
+  R = T extends AbortController ? Promise<GetResourceResponse<unknown>> : { cancel: () => void },
 >(
   requestParameters: RequestParameters,
-  arg2: T
+  arg2: T,
 ) => R;
 
 const v3compat =
@@ -143,16 +138,11 @@ const v3compat =
     v4(requestParameters, abortController)
       .then(
         (result) => {
-          return arg2(
-            undefined,
-            result.data,
-            result.cacheControl || "",
-            result.expires || ""
-          );
+          return arg2(undefined, result.data, result.cacheControl || '', result.expires || '');
         },
         (err) => {
           return arg2(err);
-        }
+        },
       )
       .catch((e) => {
         return arg2(e);
@@ -178,11 +168,8 @@ export class Protocol {
     return this.tiles.get(url);
   }
 
-  tilev4 = async (
-    params: RequestParameters,
-    abortController: AbortController
-  ) => {
-    if (params.type === "json") {
+  tilev4 = async (params: RequestParameters, abortController: AbortController) => {
+    if (params.type === 'json') {
       const pmtilesUrl = params.url.substr(10);
       let instance = this.tiles.get(pmtilesUrl);
       if (!instance) {
@@ -204,7 +191,7 @@ export class Protocol {
     const re = new RegExp(/pmtiles:\/\/(.+)\/(\d+)\/(\d+)\/(\d+)/);
     const result = params.url.match(re);
     if (!result) {
-      throw new Error("Invalid PMTiles protocol URL");
+      throw new Error('Invalid PMTiles protocol URL');
     }
     const pmtilesUrl = result[1];
 
