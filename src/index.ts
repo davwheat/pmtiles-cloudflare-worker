@@ -133,6 +133,39 @@ export default {
       return cacheableResponse(a, cacheableHeaders, 200);
     }
 
+    if (url.pathname.startsWith('/font/')) {
+      // Serve these direct from the bucket or cache
+      const cached = await cache.match(request.url);
+
+      if (cached) {
+        const respHeaders = new Headers(cached.headers);
+        if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
+        respHeaders.set('Vary', 'Origin');
+
+        return new Response(cached.body, {
+          headers: respHeaders,
+          status: cached.status,
+        });
+      }
+
+      // Rip from R2 bucket
+      const resp = await env.BUCKET.get(url.pathname);
+      if (!resp) {
+        return new Response(undefined, { status: 404 });
+      }
+
+      const o = resp as R2ObjectBody;
+      const a = await o.arrayBuffer();
+      const cacheableHeaders = new Headers();
+      cacheableHeaders.set('Cache-Control', `max-age=${env.CACHE_MAX_AGE || 86400}`);
+      cacheableHeaders.set('Content-Type', 'application/x-protobuf');
+      // pregzipped
+      cacheableHeaders.set('Content-Encoding', 'gzip');
+      cacheableHeaders.set('ETag', o.etag);
+
+      return cacheableResponse(a, cacheableHeaders, 200);
+    }
+
     const { ok, name, tile, ext } = tile_path(url.pathname);
 
     if (ok) {
