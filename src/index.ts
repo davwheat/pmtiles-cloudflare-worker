@@ -115,7 +115,7 @@ export default {
       }
 
       // Rip from R2 bucket
-      const resp = await env.BUCKET.get(url.pathname);
+      const resp = await env.BUCKET.get(decodeURIComponent(url.pathname).slice(1));
       if (!resp) {
         return new Response('Sprites not found', { status: 404 });
       }
@@ -149,7 +149,8 @@ export default {
       }
 
       // Rip from R2 bucket
-      const resp = await env.BUCKET.get(url.pathname);
+      const resp = await env.BUCKET.get(decodeURIComponent(url.pathname).slice(1));
+
       if (!resp) {
         return new Response('Font not found', { status: 404 });
       }
