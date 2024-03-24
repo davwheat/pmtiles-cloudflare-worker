@@ -99,7 +99,7 @@ export default {
       return new Response(body, { headers: respHeaders, status: status });
     };
 
-    if (['/sprite.json', '/sprite@2x.json', '/sprite.png', '/sprite@2x.png'].includes(url.pathname)) {
+    if (['sprite.json', 'sprite@2x.json', 'sprite.png', 'sprite@2x.png'].includes(url.pathname.split('/').pop() || '')) {
       // Serve these direct from the bucket or cache
       const cached = await cache.match(request.url);
 
