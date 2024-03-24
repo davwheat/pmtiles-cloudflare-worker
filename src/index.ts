@@ -1,5 +1,5 @@
-import { Compression, EtagMismatch, PMTiles, RangeResponse, ResolvedValueCache, Source, TileType } from '../../../js/index';
-import { pmtiles_path, tileJSON, tile_path } from '../../shared/index';
+import { Compression, EtagMismatch, PMTiles, RangeResponse, ResolvedValueCache, Source, TileType } from './shared2';
+import { pmtiles_path, tileJSON, tile_path } from './shared';
 
 interface Env {
   // biome-ignore lint: config name
