@@ -24,11 +24,11 @@ In order to use the fonts without a Mapbox API key edit your Mapbox GL Style JSO
 
 The following fonts that are available in Mapbox Studio are supported.
 
-* Noto Sans (patched by Klokan Technologies)
-* Open Sans
-* PT Sans
-* Roboto
-* Metropolis
+- Noto Sans (patched by Klokan Technologies)
+- Open Sans
+- PT Sans
+- Roboto
+- Metropolis
 
 ## Package the Fonts
 
@@ -43,6 +43,7 @@ Generate fonts:
 ```
 node ./generate.js
 ```
+
 The PBFs will created be in the `_output` directory.
 
 ## Font License
