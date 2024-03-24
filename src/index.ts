@@ -1,13 +1,5 @@
-import {
-  Compression,
-  EtagMismatch,
-  PMTiles,
-  RangeResponse,
-  ResolvedValueCache,
-  Source,
-  TileType,
-} from "../../../js/index";
-import { pmtiles_path, tileJSON, tile_path } from "../../shared/index";
+import { Compression, EtagMismatch, PMTiles, RangeResponse, ResolvedValueCache, Source, TileType } from '../../../js/index';
+import { pmtiles_path, tileJSON, tile_path } from '../../shared/index';
 
 interface Env {
   // biome-ignore lint: config name
@@ -24,19 +16,16 @@ interface Env {
 
 class KeyNotFoundError extends Error {}
 
-async function nativeDecompress(
-  buf: ArrayBuffer,
-  compression: Compression
-): Promise<ArrayBuffer> {
+async function nativeDecompress(buf: ArrayBuffer, compression: Compression): Promise<ArrayBuffer> {
   if (compression === Compression.None || compression === Compression.Unknown) {
     return buf;
   }
   if (compression === Compression.Gzip) {
     const stream = new Response(buf).body;
-    const result = stream?.pipeThrough(new DecompressionStream("gzip"));
+    const result = stream?.pipeThrough(new DecompressionStream('gzip'));
     return new Response(result).arrayBuffer();
   }
-  throw Error("Compression method not supported");
+  throw Error('Compression method not supported');
 }
 
 const CACHE = new ResolvedValueCache(25, undefined, nativeDecompress);
@@ -54,21 +43,13 @@ class R2Source implements Source {
     return this.archiveName;
   }
 
-  async getBytes(
-    offset: number,
-    length: number,
-    signal?: AbortSignal,
-    etag?: string
-  ): Promise<RangeResponse> {
-    const resp = await this.env.BUCKET.get(
-      pmtiles_path(this.archiveName, this.env.PMTILES_PATH),
-      {
-        range: { offset: offset, length: length },
-        onlyIf: { etagMatches: etag },
-      }
-    );
+  async getBytes(offset: number, length: number, signal?: AbortSignal, etag?: string): Promise<RangeResponse> {
+    const resp = await this.env.BUCKET.get(pmtiles_path(this.archiveName, this.env.PMTILES_PATH), {
+      range: { offset: offset, length: length },
+      onlyIf: { etagMatches: etag },
+    });
     if (!resp) {
-      throw new KeyNotFoundError("Archive not found");
+      throw new KeyNotFoundError('Archive not found');
     }
 
     const o = resp as R2ObjectBody;
@@ -88,13 +69,8 @@ class R2Source implements Source {
 }
 
 export default {
-  async fetch(
-    request: Request,
-    env: Env,
-    ctx: ExecutionContext
-  ): Promise<Response> {
-    if (request.method.toUpperCase() === "POST")
-      return new Response(undefined, { status: 405 });
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (request.method.toUpperCase() === 'POST') return new Response(undefined, { status: 405 });
 
     const url = new URL(request.url);
     const { ok, name, tile, ext } = tile_path(url.pathname);
@@ -102,10 +78,10 @@ export default {
     const cache = caches.default;
 
     if (ok) {
-      let allowedOrigin = "";
-      if (typeof env.ALLOWED_ORIGINS !== "undefined") {
-        for (const o of env.ALLOWED_ORIGINS.split(",")) {
-          if (o === request.headers.get("Origin") || o === "*") {
+      let allowedOrigin = '';
+      if (typeof env.ALLOWED_ORIGINS !== 'undefined') {
+        for (const o of env.ALLOWED_ORIGINS.split(',')) {
+          if (o === request.headers.get('Origin') || o === '*') {
             allowedOrigin = o;
           }
         }
@@ -114,9 +90,8 @@ export default {
       const cached = await cache.match(request.url);
       if (cached) {
         const respHeaders = new Headers(cached.headers);
-        if (allowedOrigin)
-          respHeaders.set("Access-Control-Allow-Origin", allowedOrigin);
-        respHeaders.set("Vary", "Origin");
+        if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
+        respHeaders.set('Vary', 'Origin');
 
         return new Response(cached.body, {
           headers: respHeaders,
@@ -124,15 +99,8 @@ export default {
         });
       }
 
-      const cacheableResponse = (
-        body: ArrayBuffer | string | undefined,
-        cacheableHeaders: Headers,
-        status: number
-      ) => {
-        cacheableHeaders.set(
-          "Cache-Control",
-          `max-age=${env.CACHE_MAX_AGE || 86400}`
-        );
+      const cacheableResponse = (body: ArrayBuffer | string | undefined, cacheableHeaders: Headers, status: number) => {
+        cacheableHeaders.set('Cache-Control', `max-age=${env.CACHE_MAX_AGE || 86400}`);
         const cacheable = new Response(body, {
           headers: cacheableHeaders,
           status: status,
@@ -141,9 +109,8 @@ export default {
         ctx.waitUntil(cache.put(request.url, cacheable));
 
         const respHeaders = new Headers(cacheableHeaders);
-        if (allowedOrigin)
-          respHeaders.set("Access-Control-Allow-Origin", allowedOrigin);
-        respHeaders.set("Vary", "Origin");
+        if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
+        respHeaders.set('Vary', 'Origin');
         return new Response(body, { headers: respHeaders, status: status });
       };
 
@@ -154,14 +121,9 @@ export default {
         const pHeader = await p.getHeader();
 
         if (!tile) {
-          cacheableHeaders.set("Content-Type", "application/json");
+          cacheableHeaders.set('Content-Type', 'application/json');
 
-          const t = tileJSON(
-            pHeader,
-            await p.getMetadata(),
-            env.PUBLIC_HOSTNAME || url.hostname,
-            name
-          );
+          const t = tileJSON(pHeader, await p.getMetadata(), env.PUBLIC_HOSTNAME || url.hostname, name);
 
           return cacheableResponse(JSON.stringify(t), cacheableHeaders, 200);
         }
@@ -171,22 +133,18 @@ export default {
         }
 
         for (const pair of [
-          [TileType.Mvt, "mvt"],
-          [TileType.Png, "png"],
-          [TileType.Jpeg, "jpg"],
-          [TileType.Webp, "webp"],
-          [TileType.Avif, "avif"],
+          [TileType.Mvt, 'mvt'],
+          [TileType.Png, 'png'],
+          [TileType.Jpeg, 'jpg'],
+          [TileType.Webp, 'webp'],
+          [TileType.Avif, 'avif'],
         ]) {
           if (pHeader.tileType === pair[0] && ext !== pair[1]) {
-            if (pHeader.tileType === TileType.Mvt && ext === "pbf") {
+            if (pHeader.tileType === TileType.Mvt && ext === 'pbf') {
               // allow this for now. Eventually we will delete this in favor of .mvt
               continue;
             }
-            return cacheableResponse(
-              `Bad request: requested .${ext} but archive has type .${pair[1]}`,
-              cacheableHeaders,
-              400
-            );
+            return cacheableResponse(`Bad request: requested .${ext} but archive has type .${pair[1]}`, cacheableHeaders, 400);
           }
         }
 
@@ -194,16 +152,16 @@ export default {
 
         switch (pHeader.tileType) {
           case TileType.Mvt:
-            cacheableHeaders.set("Content-Type", "application/x-protobuf");
+            cacheableHeaders.set('Content-Type', 'application/x-protobuf');
             break;
           case TileType.Png:
-            cacheableHeaders.set("Content-Type", "image/png");
+            cacheableHeaders.set('Content-Type', 'image/png');
             break;
           case TileType.Jpeg:
-            cacheableHeaders.set("Content-Type", "image/jpeg");
+            cacheableHeaders.set('Content-Type', 'image/jpeg');
             break;
           case TileType.Webp:
-            cacheableHeaders.set("Content-Type", "image/webp");
+            cacheableHeaders.set('Content-Type', 'image/webp');
             break;
         }
 
@@ -213,12 +171,12 @@ export default {
         return cacheableResponse(undefined, cacheableHeaders, 204);
       } catch (e) {
         if (e instanceof KeyNotFoundError) {
-          return cacheableResponse("Archive not found", cacheableHeaders, 404);
+          return cacheableResponse('Archive not found', cacheableHeaders, 404);
         }
         throw e;
       }
     }
 
-    return new Response("Invalid URL", { status: 404 });
+    return new Response('Invalid URL', { status: 404 });
   },
 };
