@@ -1,0 +1,31 @@
+name: Deploy
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.x'
+          cache: 'yarn'
+
+      - name: Install dependencies
+        run: yarn install --immutable
+
+      - name: Check formatting
+        run: yarn run format:check
+
+      - name: Deploy worker
+        uses: cloudflare/wrangler-action@v3
+        if: github.ref == 'refs/heads/deploy' && github.event_name == 'push'
+        with:
+          apiToken: ${{ secrets.CF_API_TOKEN }}
