@@ -117,7 +117,7 @@ export default {
       // Rip from R2 bucket
       const resp = await env.BUCKET.get(url.pathname);
       if (!resp) {
-        return new Response(undefined, { status: 404 });
+        return new Response('Sprites not found', { status: 404 });
       }
 
       const o = resp as R2ObjectBody;
@@ -151,7 +151,7 @@ export default {
       // Rip from R2 bucket
       const resp = await env.BUCKET.get(url.pathname);
       if (!resp) {
-        return new Response(undefined, { status: 404 });
+        return new Response('Font not found', { status: 404 });
       }
 
       const o = resp as R2ObjectBody;
