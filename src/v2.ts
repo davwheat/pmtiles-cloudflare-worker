@@ -1,12 +1,5 @@
-import { decompressSync } from "fflate";
-import {
-  Cache,
-  Compression,
-  Header,
-  RangeResponse,
-  Source,
-  TileType,
-} from "./shared2";
+import { decompressSync } from 'fflate';
+import { Cache, Compression, Header, RangeResponse, Source, TileType } from './shared2';
 
 export const shift = (n: number, shift: number) => {
   return n * 2 ** shift;
@@ -39,13 +32,7 @@ export interface EntryV2 {
   isDir: boolean;
 }
 
-const compare = (
-  tz: number,
-  tx: number,
-  ty: number,
-  view: DataView,
-  i: number
-) => {
+const compare = (tz: number, tx: number, ty: number, view: DataView, i: number) => {
   if (tz !== view.getUint8(i)) return tz - view.getUint8(i);
   const x = getUint24(view, i + 1);
   if (tx !== x) return tx - x;
@@ -54,12 +41,7 @@ const compare = (
   return 0;
 };
 
-export const queryLeafdir = (
-  view: DataView,
-  z: number,
-  x: number,
-  y: number
-): EntryV2 | null => {
+export const queryLeafdir = (view: DataView, z: number, x: number, y: number): EntryV2 | null => {
   const offsetLen = queryView(view, z | 0x80, x, y);
   if (offsetLen) {
     return {
@@ -89,12 +71,7 @@ export const queryTile = (view: DataView, z: number, x: number, y: number) => {
   return null;
 };
 
-const queryView = (
-  view: DataView,
-  z: number,
-  x: number,
-  y: number
-): [number, number] | null => {
+const queryView = (view: DataView, z: number, x: number, y: number): [number, number] | null => {
   let m = 0;
   let n = view.byteLength / 17 - 1;
   while (m <= n) {
@@ -205,22 +182,20 @@ async function getHeader(source: Source): Promise<Header> {
   const jsonSize = dataview.getUint32(4, true);
   const rootEntries = dataview.getUint16(8, true);
 
-  const dec = new TextDecoder("utf-8");
-  const jsonMetadata = JSON.parse(
-    dec.decode(new DataView(resp.data, 10, jsonSize))
-  );
+  const dec = new TextDecoder('utf-8');
+  const jsonMetadata = JSON.parse(dec.decode(new DataView(resp.data, 10, jsonSize)));
   let tileCompression = Compression.Unknown;
-  if (jsonMetadata.compression === "gzip") {
+  if (jsonMetadata.compression === 'gzip') {
     tileCompression = Compression.Gzip;
   }
 
   let minzoom = 0;
-  if ("minzoom" in jsonMetadata) {
+  if ('minzoom' in jsonMetadata) {
     minzoom = +jsonMetadata.minzoom;
   }
 
   let maxzoom = 0;
-  if ("maxzoom" in jsonMetadata) {
+  if ('maxzoom' in jsonMetadata) {
     maxzoom = +jsonMetadata.maxzoom;
   }
 
@@ -233,7 +208,7 @@ async function getHeader(source: Source): Promise<Header> {
   let maxLat = 85.0;
 
   if (jsonMetadata.bounds) {
-    const split = jsonMetadata.bounds.split(",");
+    const split = jsonMetadata.bounds.split(',');
     minLon = +split[0];
     minLat = +split[1];
     maxLon = +split[2];
@@ -241,7 +216,7 @@ async function getHeader(source: Source): Promise<Header> {
   }
 
   if (jsonMetadata.center) {
-    const split = jsonMetadata.center.split(",");
+    const split = jsonMetadata.center.split(',');
     centerLon = +split[0];
     centerLat = +split[1];
     centerZoom = +split[2];
@@ -285,14 +260,9 @@ async function getZxy(
   z: number,
   x: number,
   y: number,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<RangeResponse | undefined> {
-  let rootDir = await cache.getArrayBuffer(
-    source,
-    header.rootDirectoryOffset,
-    header.rootDirectoryLength,
-    header
-  );
+  let rootDir = await cache.getArrayBuffer(source, header.rootDirectoryOffset, header.rootDirectoryLength, header);
   if (header.specVersion === 1) {
     rootDir = sortDir(rootDir);
   }
@@ -314,30 +284,16 @@ async function getZxy(
   const leafcoords = deriveLeaf(new DataView(rootDir), { z: z, x: x, y: y });
 
   if (leafcoords) {
-    const leafdirEntry = queryLeafdir(
-      new DataView(rootDir),
-      leafcoords.z,
-      leafcoords.x,
-      leafcoords.y
-    );
+    const leafdirEntry = queryLeafdir(new DataView(rootDir), leafcoords.z, leafcoords.x, leafcoords.y);
     if (leafdirEntry) {
-      let leafDir = await cache.getArrayBuffer(
-        source,
-        leafdirEntry.offset,
-        leafdirEntry.length,
-        header
-      );
+      let leafDir = await cache.getArrayBuffer(source, leafdirEntry.offset, leafdirEntry.length, header);
 
       if (header.specVersion === 1) {
         leafDir = sortDir(leafDir);
       }
       const tileEntry = queryTile(new DataView(leafDir), z, x, y);
       if (tileEntry) {
-        const resp = await source.getBytes(
-          tileEntry.offset,
-          tileEntry.length,
-          signal
-        );
+        const resp = await source.getBytes(tileEntry.offset, tileEntry.length, signal);
         let tileData = resp.data;
 
         const view = new DataView(tileData);
