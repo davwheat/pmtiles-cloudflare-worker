@@ -2,7 +2,9 @@ name = "osm-basemap-tiles"
 main = "src/index.ts"
 compatibility_date = "2024-03-24"
 
-r2_buckets = [{ binding = "BUCKET", bucket_name = "osm-tiles" }]
+r2_buckets = [
+  { binding = "BUCKET", preview_bucket_name = "osm-tiles", bucket_name = "osm-tiles" },
+]
 
 [vars]
 ALLOWED_ORIGINS = "https://mastdatabase.co.uk,https://internal.mastdatabase.co.uk,http://localhost:8000,http://localhost:8001,http://localhost:8687"
