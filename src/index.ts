@@ -70,7 +70,7 @@ class R2Source implements Source {
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (request.method.toUpperCase() === 'POST') return new Response(undefined, { status: 405 });
+    if (request.method.toUpperCase() !== 'GET') return new Response(undefined, { status: 405 });
 
     const url = new URL(request.url);
     const { ok, name, tile, ext } = tile_path(url.pathname);
