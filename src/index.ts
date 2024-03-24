@@ -72,22 +72,37 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method.toUpperCase() !== 'GET') return new Response(undefined, { status: 405 });
 
-    const url = new URL(request.url);
-    const { ok, name, tile, ext } = tile_path(url.pathname);
-
-    const cache = caches.default;
-
-    if (ok) {
-      let allowedOrigin = '';
-      if (typeof env.ALLOWED_ORIGINS !== 'undefined') {
-        for (const o of env.ALLOWED_ORIGINS.split(',')) {
-          if (o === request.headers.get('Origin') || o === '*') {
-            allowedOrigin = o;
-          }
+    let allowedOrigin = '';
+    if (typeof env.ALLOWED_ORIGINS !== 'undefined') {
+      for (const o of env.ALLOWED_ORIGINS.split(',')) {
+        if (o === request.headers.get('Origin') || o === '*') {
+          allowedOrigin = o;
         }
       }
+    }
 
+    const url = new URL(request.url);
+    const cache = caches.default;
+
+    const cacheableResponse = (body: ArrayBuffer | string | undefined, cacheableHeaders: Headers, status: number) => {
+      cacheableHeaders.set('Cache-Control', `max-age=${env.CACHE_MAX_AGE || 86400}`);
+      const cacheable = new Response(body, {
+        headers: cacheableHeaders,
+        status: status,
+      });
+
+      ctx.waitUntil(cache.put(request.url, cacheable));
+
+      const respHeaders = new Headers(cacheableHeaders);
+      if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
+      respHeaders.set('Vary', 'Origin');
+      return new Response(body, { headers: respHeaders, status: status });
+    };
+
+    if (['/sprites.json', '/sprites@2x.json', '/sprites.png', '/sprites@2x.png'].includes(url.pathname)) {
+      // Serve these direct from the bucket or cache
       const cached = await cache.match(request.url);
+
       if (cached) {
         const respHeaders = new Headers(cached.headers);
         if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
@@ -99,20 +114,39 @@ export default {
         });
       }
 
-      const cacheableResponse = (body: ArrayBuffer | string | undefined, cacheableHeaders: Headers, status: number) => {
-        cacheableHeaders.set('Cache-Control', `max-age=${env.CACHE_MAX_AGE || 86400}`);
-        const cacheable = new Response(body, {
-          headers: cacheableHeaders,
-          status: status,
-        });
+      // Rip from R2 bucket
+      const resp = await env.BUCKET.get(url.pathname);
+      if (!resp) {
+        return new Response(undefined, { status: 404 });
+      }
 
-        ctx.waitUntil(cache.put(request.url, cacheable));
+      const o = resp as R2ObjectBody;
+      const a = await o.arrayBuffer();
+      const cacheableHeaders = new Headers();
+      cacheableHeaders.set('Cache-Control', `max-age=${env.CACHE_MAX_AGE || 86400}`);
+      cacheableHeaders.set(
+        'Content-Type',
+        o.httpMetadata?.contentType || url.pathname.endsWith('.json') ? 'application/json' : 'image/png',
+      );
+      cacheableHeaders.set('ETag', o.etag);
 
-        const respHeaders = new Headers(cacheableHeaders);
+      return cacheableResponse(a, cacheableHeaders, 200);
+    }
+
+    const { ok, name, tile, ext } = tile_path(url.pathname);
+
+    if (ok) {
+      const cached = await cache.match(request.url);
+      if (cached) {
+        const respHeaders = new Headers(cached.headers);
         if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
         respHeaders.set('Vary', 'Origin');
-        return new Response(body, { headers: respHeaders, status: status });
-      };
+
+        return new Response(cached.body, {
+          headers: respHeaders,
+          status: cached.status,
+        });
+      }
 
       const cacheableHeaders = new Headers();
       const source = new R2Source(env, name);

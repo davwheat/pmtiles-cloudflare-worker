@@ -1,19 +1,18 @@
-import { Header, TileType } from "../../js/index";
+import { Header, TileType } from '../../js/index';
 
 export const pmtiles_path = (name: string, setting?: string): string => {
   if (setting) {
-    return setting.replaceAll("{name}", name);
+    return setting.replaceAll('{name}', name);
   }
-  return name + ".pmtiles";
+  return name + '.pmtiles';
 };
 
-const TILE =
-  /^\/(?<NAME>[0-9a-zA-Z\/!\-_\.\*\'\(\)]+)\/(?<Z>\d+)\/(?<X>\d+)\/(?<Y>\d+).(?<EXT>[a-z]+)$/;
+const TILE = /^\/(?<NAME>[0-9a-zA-Z\/!\-_\.\*\'\(\)]+)\/(?<Z>\d+)\/(?<X>\d+)\/(?<Y>\d+).(?<EXT>[a-z]+)$/;
 
 const TILESET = /^\/(?<NAME>[0-9a-zA-Z\/!\-_\.\*\'\(\)]+).json$/;
 
 export const tile_path = (
-  path: string
+  path: string,
 ): {
   ok: boolean;
   name: string;
@@ -31,35 +30,30 @@ export const tile_path = (
 
   if (tileset_match) {
     const g = tileset_match.groups!;
-    return { ok: true, name: g.NAME, ext: "json" };
+    return { ok: true, name: g.NAME, ext: 'json' };
   }
 
-  return { ok: false, name: "", tile: [0, 0, 0], ext: "" };
+  return { ok: false, name: '', tile: [0, 0, 0], ext: '' };
 };
 
-export const tileJSON = (
-  header: Header,
-  metadata: any,
-  hostname: string,
-  tileset_name: string
-) => {
-  let ext = "";
+export const tileJSON = (header: Header, metadata: any, hostname: string, tileset_name: string) => {
+  let ext = '';
   if (header.tileType === TileType.Mvt) {
-    ext = ".mvt";
+    ext = '.mvt';
   } else if (header.tileType === TileType.Png) {
-    ext = ".png";
+    ext = '.png';
   } else if (header.tileType === TileType.Jpeg) {
-    ext = ".jpg";
+    ext = '.jpg';
   } else if (header.tileType === TileType.Webp) {
-    ext = ".webp";
+    ext = '.webp';
   } else if (header.tileType === TileType.Avif) {
-    ext = ".avif";
+    ext = '.avif';
   }
 
   return {
-    tilejson: "3.0.0",
-    scheme: "xyz",
-    tiles: ["https://" + hostname + "/" + tileset_name + "/{z}/{x}/{y}" + ext],
+    tilejson: '3.0.0',
+    scheme: 'xyz',
+    tiles: ['https://' + hostname + '/' + tileset_name + '/{z}/{x}/{y}' + ext],
     vector_layers: metadata.vector_layers,
     attribution: metadata.attribution,
     description: metadata.description,
