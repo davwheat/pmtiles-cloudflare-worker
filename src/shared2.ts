@@ -1,6 +1,6 @@
-import { decompressSync } from "fflate";
-import v2 from "./v2";
-export * from "./adapters";
+import { decompressSync } from 'fflate';
+import v2 from './v2';
+export * from './adapters';
 
 /** @hidden */
 export interface BufferPosition {
@@ -32,7 +32,7 @@ function readVarintRemainder(l: number, p: BufferPosition): number {
   b = buf[p.pos++];
   h |= (b & 0x01) << 31;
   if (b < 0x80) return toNum(l, h);
-  throw new Error("Expected varint not more than 10 bytes");
+  throw new Error('Expected varint not more than 10 bytes');
 }
 
 /** @hidden */
@@ -88,10 +88,8 @@ function idOnLevel(z: number, pos: number): [number, number, number] {
 }
 
 const tzValues: number[] = [
-  0, 1, 5, 21, 85, 341, 1365, 5461, 21845, 87381, 349525, 1398101, 5592405,
-  22369621, 89478485, 357913941, 1431655765, 5726623061, 22906492245,
-  91625968981, 366503875925, 1466015503701, 5864062014805, 23456248059221,
-  93824992236885, 375299968947541, 1501199875790165,
+  0, 1, 5, 21, 85, 341, 1365, 5461, 21845, 87381, 349525, 1398101, 5592405, 22369621, 89478485, 357913941, 1431655765, 5726623061,
+  22906492245, 91625968981, 366503875925, 1466015503701, 5864062014805, 23456248059221, 93824992236885, 375299968947541, 1501199875790165,
 ];
 
 /**
@@ -99,10 +97,10 @@ const tzValues: number[] = [
  */
 export function zxyToTileId(z: number, x: number, y: number): number {
   if (z > 26) {
-    throw Error("Tile zoom level exceeds max safe number limit (26)");
+    throw Error('Tile zoom level exceeds max safe number limit (26)');
   }
   if (x > 2 ** z - 1 || y > 2 ** z - 1) {
-    throw Error("tile x/y outside zoom level bounds");
+    throw Error('tile x/y outside zoom level bounds');
   }
 
   const acc = tzValues[z];
@@ -137,7 +135,7 @@ export function tileIdToZxy(i: number): [number, number, number] {
     acc += numTiles;
   }
 
-  throw Error("Tile zoom level exceeds max safe number limit (26)");
+  throw Error('Tile zoom level exceeds max safe number limit (26)');
 }
 
 /**
@@ -169,34 +167,28 @@ export enum Compression {
  * Should use the native DecompressionStream on browsers, zlib on node.
  * Should throw if the compression algorithm is not supported.
  */
-export type DecompressFunc = (
-  buf: ArrayBuffer,
-  compression: Compression
-) => Promise<ArrayBuffer>;
+export type DecompressFunc = (buf: ArrayBuffer, compression: Compression) => Promise<ArrayBuffer>;
 
-async function defaultDecompress(
-  buf: ArrayBuffer,
-  compression: Compression
-): Promise<ArrayBuffer> {
+async function defaultDecompress(buf: ArrayBuffer, compression: Compression): Promise<ArrayBuffer> {
   if (compression === Compression.None || compression === Compression.Unknown) {
     return buf;
   }
   if (compression === Compression.Gzip) {
     // biome-ignore lint: needed to detect DecompressionStream in browser+node+cloudflare workers
-    if (typeof (globalThis as any).DecompressionStream === "undefined") {
+    if (typeof (globalThis as any).DecompressionStream === 'undefined') {
       return decompressSync(new Uint8Array(buf));
     }
     const stream = new Response(buf).body;
     if (!stream) {
-      throw Error("Failed to read response stream");
+      throw Error('Failed to read response stream');
     }
     const result: ReadableStream<Uint8Array> = stream.pipeThrough(
       // biome-ignore lint: needed to detect DecompressionStream in browser+node+cloudflare workers
-      new (globalThis as any).DecompressionStream("gzip")
+      new (globalThis as any).DecompressionStream('gzip'),
     );
     return new Response(result).arrayBuffer();
   }
-  throw Error("Compression method not supported");
+  throw Error('Compression method not supported');
 }
 
 /**
@@ -287,12 +279,7 @@ export interface RangeResponse {
  * Interface for retrieving an archive from remote or local storage.
  */
 export interface Source {
-  getBytes: (
-    offset: number,
-    length: number,
-    signal?: AbortSignal,
-    etag?: string
-  ) => Promise<RangeResponse>;
+  getBytes: (offset: number, length: number, signal?: AbortSignal, etag?: string) => Promise<RangeResponse>;
 
   /**
    * Return a unique string key for the archive e.g. a URL.
@@ -347,12 +334,7 @@ export class FetchSource implements Source {
     this.customHeaders = customHeaders;
   }
 
-  async getBytes(
-    offset: number,
-    length: number,
-    passedSignal?: AbortSignal,
-    etag?: string
-  ): Promise<RangeResponse> {
+  async getBytes(offset: number, length: number, passedSignal?: AbortSignal, etag?: string): Promise<RangeResponse> {
     let controller: AbortController | undefined;
     let signal: AbortSignal | undefined;
     if (passedSignal) {
@@ -363,7 +345,7 @@ export class FetchSource implements Source {
     }
 
     const requestHeaders = new Headers(this.customHeaders);
-    requestHeaders.set("range", `bytes=${offset}-${offset + length - 1}`);
+    requestHeaders.set('range', `bytes=${offset}-${offset + length - 1}`);
 
     // we don't send if match because:
     // * it disables browser caching completely (Chromium)
@@ -373,7 +355,7 @@ export class FetchSource implements Source {
     // if any etag mismatch is detected, we need to ignore the browser cache
     let cache: string | undefined;
     if (this.mustReload) {
-      cache = "reload";
+      cache = 'reload';
     }
 
     let resp = await fetch(this.url, {
@@ -385,22 +367,22 @@ export class FetchSource implements Source {
 
     // handle edge case where the archive is < 16384 kb total.
     if (offset === 0 && resp.status === 416) {
-      const contentRange = resp.headers.get("Content-Range");
-      if (!contentRange || !contentRange.startsWith("bytes */")) {
-        throw Error("Missing content-length on 416 response");
+      const contentRange = resp.headers.get('Content-Range');
+      if (!contentRange || !contentRange.startsWith('bytes */')) {
+        throw Error('Missing content-length on 416 response');
       }
       const actualLength = +contentRange.substr(8);
       resp = await fetch(this.url, {
         signal: signal,
-        cache: "reload",
+        cache: 'reload',
         headers: { range: `bytes=0-${actualLength - 1}` },
         //biome-ignore lint: "cache" is incompatible between cloudflare workers and browser
       } as any);
     }
 
     // if it's a weak etag, it's not useful for us, so ignore it.
-    let newEtag = resp.headers.get("Etag");
-    if (newEtag?.startsWith("W/")) {
+    let newEtag = resp.headers.get('Etag');
+    if (newEtag?.startsWith('W/')) {
       newEtag = null;
     }
 
@@ -416,11 +398,11 @@ export class FetchSource implements Source {
 
     // some well-behaved backends, e.g. DigitalOcean CDN, respond with 200 instead of 206
     // but we also need to detect no support for Byte Serving which is returning the whole file
-    const contentLength = resp.headers.get("Content-Length");
+    const contentLength = resp.headers.get('Content-Length');
     if (resp.status === 200 && (!contentLength || +contentLength > length)) {
       if (controller) controller.abort();
       throw Error(
-        "Server returned no content-length header or content-length exceeding request. Check that your storage backend supports HTTP Byte Serving."
+        'Server returned no content-length header or content-length exceeding request. Check that your storage backend supports HTTP Byte Serving.',
       );
     }
 
@@ -428,8 +410,8 @@ export class FetchSource implements Source {
     return {
       data: a,
       etag: newEtag || undefined,
-      cacheControl: resp.headers.get("Cache-Control") || undefined,
-      expires: resp.headers.get("Expires") || undefined,
+      cacheControl: resp.headers.get('Cache-Control') || undefined,
+      expires: resp.headers.get('Expires') || undefined,
     };
   }
 }
@@ -448,9 +430,7 @@ export function bytesToHeader(bytes: ArrayBuffer, etag?: string): Header {
   const v = new DataView(bytes);
   const specVersion = v.getUint8(7);
   if (specVersion > 3) {
-    throw Error(
-      `Archive is spec version ${specVersion} but this library supports up to spec version 3`
-    );
+    throw Error(`Archive is spec version ${specVersion} but this library supports up to spec version 3`);
   }
 
   return {
@@ -519,15 +499,11 @@ function deserializeIndex(buffer: ArrayBuffer): Entry[] {
 function detectVersion(a: ArrayBuffer): number {
   const v = new DataView(a);
   if (v.getUint16(2, true) === 2) {
-    console.warn(
-      "PMTiles spec version 2 has been deprecated; please see github.com/protomaps/PMTiles for tools to upgrade"
-    );
+    console.warn('PMTiles spec version 2 has been deprecated; please see github.com/protomaps/PMTiles for tools to upgrade');
     return 2;
   }
   if (v.getUint16(2, true) === 1) {
-    console.warn(
-      "PMTiles spec version 1 has been deprecated; please see github.com/protomaps/PMTiles for tools to upgrade"
-    );
+    console.warn('PMTiles spec version 1 has been deprecated; please see github.com/protomaps/PMTiles for tools to upgrade');
     return 1;
   }
   return 3;
@@ -537,37 +513,24 @@ function detectVersion(a: ArrayBuffer): number {
  * Error thrown when a response for PMTiles over HTTP does not match previous, cached parts of the archive.
  * The default PMTiles implementation will catch this error once internally and retry a request.
  */
-export class EtagMismatch extends Error { }
+export class EtagMismatch extends Error {}
 
 /**
  * Interface for caches of parts (headers, directories) of a PMTiles archive.
  */
 export interface Cache {
   getHeader: (source: Source) => Promise<Header>;
-  getDirectory: (
-    source: Source,
-    offset: number,
-    length: number,
-    header: Header
-  ) => Promise<Entry[]>;
-  getArrayBuffer: (
-    source: Source,
-    offset: number,
-    length: number,
-    header: Header
-  ) => Promise<ArrayBuffer>;
+  getDirectory: (source: Source, offset: number, length: number, header: Header) => Promise<Entry[]>;
+  getArrayBuffer: (source: Source, offset: number, length: number, header: Header) => Promise<ArrayBuffer>;
   invalidate: (source: Source) => Promise<void>;
 }
 
-async function getHeaderAndRoot(
-  source: Source,
-  decompress: DecompressFunc
-): Promise<[Header, [string, number, Entry[] | ArrayBuffer]?]> {
+async function getHeaderAndRoot(source: Source, decompress: DecompressFunc): Promise<[Header, [string, number, Entry[] | ArrayBuffer]?]> {
   const resp = await source.getBytes(0, 16384);
 
   const v = new DataView(resp.data);
   if (v.getUint16(0, true) !== 0x4d50) {
-    throw new Error("Wrong magic number for PMTiles archive");
+    throw new Error('Wrong magic number for PMTiles archive');
   }
 
   // V2 COMPATIBILITY
@@ -581,31 +544,19 @@ async function getHeaderAndRoot(
 
   // optimistically set the root directory
   // TODO check root bounds
-  const rootDirData = resp.data.slice(
-    header.rootDirectoryOffset,
-    header.rootDirectoryOffset + header.rootDirectoryLength
-  );
-  const dirKey = `${source.getKey()}|${header.etag || ""}|${header.rootDirectoryOffset
-    }|${header.rootDirectoryLength}`;
+  const rootDirData = resp.data.slice(header.rootDirectoryOffset, header.rootDirectoryOffset + header.rootDirectoryLength);
+  const dirKey = `${source.getKey()}|${header.etag || ''}|${header.rootDirectoryOffset}|${header.rootDirectoryLength}`;
 
-  const rootDir = deserializeIndex(
-    await decompress(rootDirData, header.internalCompression)
-  );
+  const rootDir = deserializeIndex(await decompress(rootDirData, header.internalCompression));
   return [header, [dirKey, rootDir.length, rootDir]];
 }
 
-async function getDirectory(
-  source: Source,
-  decompress: DecompressFunc,
-  offset: number,
-  length: number,
-  header: Header
-): Promise<Entry[]> {
+async function getDirectory(source: Source, decompress: DecompressFunc, offset: number, length: number, header: Header): Promise<Entry[]> {
   const resp = await source.getBytes(offset, length, undefined, header.etag);
   const data = await decompress(resp.data, header.internalCompression);
   const directory = deserializeIndex(data);
   if (directory.length === 0) {
-    throw new Error("Empty directory is invalid");
+    throw new Error('Empty directory is invalid');
   }
 
   return directory;
@@ -632,9 +583,9 @@ export class ResolvedValueCache {
   constructor(
     maxCacheEntries = 100,
     prefetch = true, // deprecated
-    decompress: DecompressFunc = defaultDecompress
+    decompress: DecompressFunc = defaultDecompress,
   ) {
-    this.cache = new Map < string, ResolvedValue > ();
+    this.cache = new Map<string, ResolvedValue>();
     this.maxCacheEntries = maxCacheEntries;
     this.counter = 1;
     this.decompress = decompress;
@@ -665,14 +616,8 @@ export class ResolvedValueCache {
     return res[0];
   }
 
-  async getDirectory(
-    source: Source,
-    offset: number,
-    length: number,
-    header: Header
-  ): Promise<Entry[]> {
-    const cacheKey = `${source.getKey()}|${header.etag || ""
-      }|${offset}|${length}`;
+  async getDirectory(source: Source, offset: number, length: number, header: Header): Promise<Entry[]> {
+    const cacheKey = `${source.getKey()}|${header.etag || ''}|${offset}|${length}`;
     const cacheValue = this.cache.get(cacheKey);
     if (cacheValue) {
       cacheValue.lastUsed = this.counter++;
@@ -680,13 +625,7 @@ export class ResolvedValueCache {
       return data as Entry[];
     }
 
-    const directory = await getDirectory(
-      source,
-      this.decompress,
-      offset,
-      length,
-      header
-    );
+    const directory = await getDirectory(source, this.decompress, offset, length, header);
     this.cache.set(cacheKey, {
       lastUsed: this.counter++,
       data: directory,
@@ -696,14 +635,8 @@ export class ResolvedValueCache {
   }
 
   // for v2 backwards compatibility
-  async getArrayBuffer(
-    source: Source,
-    offset: number,
-    length: number,
-    header: Header
-  ): Promise<ArrayBuffer> {
-    const cacheKey = `${source.getKey()}|${header.etag || ""
-      }|${offset}|${length}`;
+  async getArrayBuffer(source: Source, offset: number, length: number, header: Header): Promise<ArrayBuffer> {
+    const cacheKey = `${source.getKey()}|${header.etag || ''}|${offset}|${length}`;
     const cacheValue = this.cache.get(cacheKey);
     if (cacheValue) {
       cacheValue.lastUsed = this.counter++;
@@ -762,10 +695,10 @@ export class SharedPromiseCache {
   constructor(
     maxCacheEntries = 100,
     prefetch = true, // deprecated
-    decompress: DecompressFunc = defaultDecompress
+    decompress: DecompressFunc = defaultDecompress,
   ) {
-    this.cache = new Map < string, SharedPromiseCacheValue > ();
-    this.invalidations = new Map < string, Promise < void>> ();
+    this.cache = new Map<string, SharedPromiseCacheValue>();
+    this.invalidations = new Map<string, Promise<void>>();
     this.maxCacheEntries = maxCacheEntries;
     this.counter = 1;
     this.decompress = decompress;
@@ -780,7 +713,7 @@ export class SharedPromiseCache {
       return data as Header;
     }
 
-    const p = new Promise < Header > ((resolve, reject) => {
+    const p = new Promise<Header>((resolve, reject) => {
       getHeaderAndRoot(source, this.decompress)
         .then((res) => {
           if (res[1]) {
@@ -800,14 +733,8 @@ export class SharedPromiseCache {
     return p;
   }
 
-  async getDirectory(
-    source: Source,
-    offset: number,
-    length: number,
-    header: Header
-  ): Promise<Entry[]> {
-    const cacheKey = `${source.getKey()}|${header.etag || ""
-      }|${offset}|${length}`;
+  async getDirectory(source: Source, offset: number, length: number, header: Header): Promise<Entry[]> {
+    const cacheKey = `${source.getKey()}|${header.etag || ''}|${offset}|${length}`;
     const cacheValue = this.cache.get(cacheKey);
     if (cacheValue) {
       cacheValue.lastUsed = this.counter++;
@@ -815,7 +742,7 @@ export class SharedPromiseCache {
       return data as Entry[];
     }
 
-    const p = new Promise < Entry[] > ((resolve, reject) => {
+    const p = new Promise<Entry[]>((resolve, reject) => {
       getDirectory(source, this.decompress, offset, length, header)
         .then((directory) => {
           resolve(directory);
@@ -830,14 +757,8 @@ export class SharedPromiseCache {
   }
 
   // for v2 backwards compatibility
-  async getArrayBuffer(
-    source: Source,
-    offset: number,
-    length: number,
-    header: Header
-  ): Promise<ArrayBuffer> {
-    const cacheKey = `${source.getKey()}|${header.etag || ""
-      }|${offset}|${length}`;
+  async getArrayBuffer(source: Source, offset: number, length: number, header: Header): Promise<ArrayBuffer> {
+    const cacheKey = `${source.getKey()}|${header.etag || ''}|${offset}|${length}`;
     const cacheValue = this.cache.get(cacheKey);
     if (cacheValue) {
       cacheValue.lastUsed = this.counter++;
@@ -845,7 +766,7 @@ export class SharedPromiseCache {
       return data as ArrayBuffer;
     }
 
-    const p = new Promise < ArrayBuffer > ((resolve, reject) => {
+    const p = new Promise<ArrayBuffer>((resolve, reject) => {
       source
         .getBytes(offset, length, undefined, header.etag)
         .then((resp) => {
@@ -884,7 +805,7 @@ export class SharedPromiseCache {
       return await this.invalidations.get(key);
     }
     this.cache.delete(source.getKey());
-    const p = new Promise < void> ((resolve, reject) => {
+    const p = new Promise<void>((resolve, reject) => {
       this.getHeader(source)
         .then((h) => {
           resolve();
@@ -911,12 +832,8 @@ export class PMTiles {
   cache: Cache;
   decompress: DecompressFunc;
 
-  constructor(
-    source: Source | string,
-    cache?: Cache,
-    decompress?: DecompressFunc
-  ) {
-    if (typeof source === "string") {
+  constructor(source: Source | string, cache?: Cache, decompress?: DecompressFunc) {
+    if (typeof source === 'string') {
       this.source = new FetchSource(source);
     } else {
       this.source = source;
@@ -942,12 +859,7 @@ export class PMTiles {
   }
 
   /** @hidden */
-  async getZxyAttempt(
-    z: number,
-    x: number,
-    y: number,
-    signal?: AbortSignal
-  ): Promise<RangeResponse | undefined> {
+  async getZxyAttempt(z: number, x: number, y: number, signal?: AbortSignal): Promise<RangeResponse | undefined> {
     const tileId = zxyToTileId(z, x, y);
     const header = await this.cache.getHeader(this.source);
 
@@ -963,21 +875,11 @@ export class PMTiles {
     let dO = header.rootDirectoryOffset;
     let dL = header.rootDirectoryLength;
     for (let depth = 0; depth <= 3; depth++) {
-      const directory = await this.cache.getDirectory(
-        this.source,
-        dO,
-        dL,
-        header
-      );
+      const directory = await this.cache.getDirectory(this.source, dO, dL, header);
       const entry = findTile(directory, tileId);
       if (entry) {
         if (entry.runLength > 0) {
-          const resp = await this.source.getBytes(
-            header.tileDataOffset + entry.offset,
-            entry.length,
-            signal,
-            header.etag
-          );
+          const resp = await this.source.getBytes(header.tileDataOffset + entry.offset, entry.length, signal, header.etag);
           return {
             data: await this.decompress(resp.data, header.tileCompression),
             cacheControl: resp.cacheControl,
@@ -992,7 +894,7 @@ export class PMTiles {
         return undefined;
       }
     }
-    throw Error("Maximum directory depth exceeded");
+    throw Error('Maximum directory depth exceeded');
   }
 
   /**
@@ -1000,12 +902,7 @@ export class PMTiles {
    *
    * Returns undefined if the tile does not exist in the archive.
    */
-  async getZxy(
-    z: number,
-    x: number,
-    y: number,
-    signal?: AbortSignal
-  ): Promise<RangeResponse | undefined> {
+  async getZxy(z: number, x: number, y: number, signal?: AbortSignal): Promise<RangeResponse | undefined> {
     try {
       return await this.getZxyAttempt(z, x, y, signal);
     } catch (e) {
@@ -1021,17 +918,9 @@ export class PMTiles {
   async getMetadataAttempt(): Promise<unknown> {
     const header = await this.cache.getHeader(this.source);
 
-    const resp = await this.source.getBytes(
-      header.jsonMetadataOffset,
-      header.jsonMetadataLength,
-      undefined,
-      header.etag
-    );
-    const decompressed = await this.decompress(
-      resp.data,
-      header.internalCompression
-    );
-    const dec = new TextDecoder("utf-8");
+    const resp = await this.source.getBytes(header.jsonMetadataOffset, header.jsonMetadataLength, undefined, header.etag);
+    const decompressed = await this.decompress(resp.data, header.internalCompression);
+    const dec = new TextDecoder('utf-8');
     return JSON.parse(dec.decode(decompressed));
   }
 
