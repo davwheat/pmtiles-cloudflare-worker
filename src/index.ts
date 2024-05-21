@@ -126,7 +126,7 @@ export default {
       cacheableHeaders.set('Cache-Control', `max-age=${env.CACHE_MAX_AGE || 86400}`);
       cacheableHeaders.set(
         'Content-Type',
-        o.httpMetadata?.contentType || url.pathname.endsWith('.json') ? 'application/json' : 'image/png',
+        o.httpMetadata?.contentType || (url.pathname.endsWith('.json') ? 'application/json' : 'image/png'),
       );
       cacheableHeaders.set('ETag', o.etag);
 
