@@ -96,6 +96,7 @@ export default {
       const respHeaders = new Headers(cacheableHeaders);
       if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
       respHeaders.set('Vary', 'Origin');
+      respHeaders.set('X-Worker-Cache', 'MISS');
       return new Response(body, { headers: respHeaders, status: status });
     };
 
@@ -106,6 +107,7 @@ export default {
       if (cached) {
         const respHeaders = new Headers(cached.headers);
         if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
+        respHeaders.set('X-Worker-Cache', 'HIT');
         respHeaders.set('Vary', 'Origin');
 
         return new Response(cached.body, {
@@ -140,6 +142,7 @@ export default {
       if (cached) {
         const respHeaders = new Headers(cached.headers);
         if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
+        respHeaders.set('X-Worker-Cache', 'HIT');
         respHeaders.set('Vary', 'Origin');
 
         return new Response(cached.body, {
@@ -174,6 +177,7 @@ export default {
       if (cached) {
         const respHeaders = new Headers(cached.headers);
         if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
+        respHeaders.set('X-Worker-Cache', 'HIT');
         respHeaders.set('Vary', 'Origin');
 
         return new Response(cached.body, {
