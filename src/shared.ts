@@ -65,5 +65,6 @@ export const tileJSON = (header: Header, metadata: any, hostname: string, tilese
     center: [header.centerLon, header.centerLat, header.centerZoom],
     minzoom: header.minZoom,
     maxzoom: header.maxZoom,
+    ...(header.tileType === TileType.Mlt ? { encoding: 'mlt' } : {}),
   };
 };
