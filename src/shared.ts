@@ -48,6 +48,8 @@ export const tileJSON = (header: Header, metadata: any, hostname: string, tilese
     ext = '.webp';
   } else if (header.tileType === TileType.Avif) {
     ext = '.avif';
+  } else if (header.tileType === TileType.Mlt) {
+    ext = '.mlt';
   }
 
   return {
