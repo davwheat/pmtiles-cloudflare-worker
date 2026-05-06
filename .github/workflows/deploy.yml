@@ -29,3 +29,4 @@ jobs:
         if: github.ref == 'refs/heads/deploy' && github.event_name == 'push'
         with:
           apiToken: ${{ secrets.CF_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}

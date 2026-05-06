@@ -1,18 +1,23 @@
+import { env } from 'cloudflare:workers';
 import { Compression, EtagMismatch, PMTiles, RangeResponse, ResolvedValueCache, Source, TileType } from './shared2';
 import { pmtiles_path, tileJSON, tile_path } from './shared';
 
-interface Env {
-  // biome-ignore lint: config name
-  ALLOWED_ORIGINS?: string;
-  // biome-ignore lint: config name
-  BUCKET: R2Bucket;
-  // biome-ignore lint: config name
-  CACHE_MAX_AGE?: number;
-  // biome-ignore lint: config name
-  PMTILES_PATH?: string;
-  // biome-ignore lint: config name
-  PUBLIC_HOSTNAME?: string;
+const ALLOWED_ORIGINS = new Set(
+  (env.ALLOWED_ORIGINS ?? '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean),
+);
+const ALLOW_ANY_ORIGIN = ALLOWED_ORIGINS.has('*');
+
+function getAllowedOrigin(origin: string | null): string {
+  if (ALLOW_ANY_ORIGIN) return '*';
+  return origin && ALLOWED_ORIGINS.has(origin) ? origin : '';
 }
+
+const CACHE_CONTROL_HEADER = `max-age=${env.CACHE_MAX_AGE || 86400}`;
+
+const SPRITE_PATHS = new Set(['sprite.json', 'sprite@2x.json', 'sprite.png', 'sprite@2x.png']);
 
 class KeyNotFoundError extends Error {}
 
@@ -31,11 +36,9 @@ async function nativeDecompress(buf: ArrayBuffer, compression: Compression): Pro
 const CACHE = new ResolvedValueCache(25, undefined, nativeDecompress);
 
 class R2Source implements Source {
-  env: Env;
   archiveName: string;
 
-  constructor(env: Env, archiveName: string) {
-    this.env = env;
+  constructor(archiveName: string) {
     this.archiveName = archiveName;
   }
 
@@ -44,7 +47,7 @@ class R2Source implements Source {
   }
 
   async getBytes(offset: number, length: number, signal?: AbortSignal, etag?: string): Promise<RangeResponse> {
-    const resp = await this.env.BUCKET.get(pmtiles_path(this.archiveName, this.env.PMTILES_PATH), {
+    const resp = await env.BUCKET.get(pmtiles_path(this.archiveName, env.PMTILES_PATH), {
       range: { offset: offset, length: length },
       onlyIf: { etagMatches: etag },
     });
@@ -68,24 +71,44 @@ class R2Source implements Source {
   }
 }
 
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (request.method.toUpperCase() !== 'GET') return new Response(undefined, { status: 405 });
+const PMTILES_BY_NAME = new Map<string, PMTiles>();
+const MAX_PMTILES_INSTANCES = 50;
 
-    let allowedOrigin = '';
-    if (typeof env.ALLOWED_ORIGINS !== 'undefined') {
-      for (const o of env.ALLOWED_ORIGINS.split(',')) {
-        if (o === request.headers.get('Origin') || o === '*') {
-          allowedOrigin = o;
-        }
-      }
-    }
+function getPMTiles(name: string): PMTiles {
+  let p = PMTILES_BY_NAME.get(name);
+  if (p) {
+    PMTILES_BY_NAME.delete(name);
+    PMTILES_BY_NAME.set(name, p);
+    return p;
+  }
+  p = new PMTiles(new R2Source(name), CACHE, nativeDecompress);
+  PMTILES_BY_NAME.set(name, p);
+  if (PMTILES_BY_NAME.size > MAX_PMTILES_INSTANCES) {
+    const lru = PMTILES_BY_NAME.keys().next().value;
+    if (lru !== undefined) PMTILES_BY_NAME.delete(lru);
+  }
+  return p;
+}
+
+function cacheHitResponse(cached: Response, allowedOrigin: string): Response {
+  const resp = new Response(cached.body, cached);
+  if (allowedOrigin) resp.headers.set('Access-Control-Allow-Origin', allowedOrigin);
+  resp.headers.set('Vary', 'Origin');
+  resp.headers.set('X-Worker-Cache', 'HIT');
+  return resp;
+}
+
+export default {
+  async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
+    if (request.method !== 'GET') return new Response(undefined, { status: 405 });
+
+    const allowedOrigin = getAllowedOrigin(request.headers.get('Origin'));
 
     const url = new URL(request.url);
     const cache = caches.default;
 
     const cacheableResponse = (body: ArrayBuffer | string | undefined, cacheableHeaders: Headers, status: number) => {
-      cacheableHeaders.set('Cache-Control', `max-age=${env.CACHE_MAX_AGE || 86400}`);
+      cacheableHeaders.set('Cache-Control', CACHE_CONTROL_HEADER);
       const cacheable = new Response(body, {
         headers: cacheableHeaders,
         status: status,
@@ -100,24 +123,17 @@ export default {
       return new Response(body, { headers: respHeaders, status: status });
     };
 
-    if (['sprite.json', 'sprite@2x.json', 'sprite.png', 'sprite@2x.png'].includes(url.pathname.split('/').pop() || '')) {
+    if (SPRITE_PATHS.has(url.pathname.split('/').pop() || '')) {
       // Serve these direct from the bucket or cache
       const cached = await cache.match(request.url);
 
       if (cached) {
-        const respHeaders = new Headers(cached.headers);
-        if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
-        respHeaders.set('X-Worker-Cache', 'HIT');
-        respHeaders.set('Vary', 'Origin');
-
-        return new Response(cached.body, {
-          headers: respHeaders,
-          status: cached.status,
-        });
+        return cacheHitResponse(cached, allowedOrigin);
       }
 
       // Rip from R2 bucket
-      const resp = await env.BUCKET.get(decodeURIComponent(url.pathname).slice(1));
+      const bucketKey = decodeURIComponent(url.pathname).slice(1);
+      const resp = await env.BUCKET.get(bucketKey);
       if (!resp) {
         return new Response('Sprites not found', { status: 404 });
       }
@@ -125,7 +141,7 @@ export default {
       const o = resp as R2ObjectBody;
       const a = await o.arrayBuffer();
       const cacheableHeaders = new Headers();
-      cacheableHeaders.set('Cache-Control', `max-age=${env.CACHE_MAX_AGE || 86400}`);
+      cacheableHeaders.set('Cache-Control', CACHE_CONTROL_HEADER);
       cacheableHeaders.set(
         'Content-Type',
         o.httpMetadata?.contentType || (url.pathname.endsWith('.json') ? 'application/json' : 'image/png'),
@@ -140,19 +156,12 @@ export default {
       const cached = await cache.match(request.url);
 
       if (cached) {
-        const respHeaders = new Headers(cached.headers);
-        if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
-        respHeaders.set('X-Worker-Cache', 'HIT');
-        respHeaders.set('Vary', 'Origin');
-
-        return new Response(cached.body, {
-          headers: respHeaders,
-          status: cached.status,
-        });
+        return cacheHitResponse(cached, allowedOrigin);
       }
 
       // Rip from R2 bucket
-      const resp = await env.BUCKET.get(decodeURIComponent(url.pathname).slice(1));
+      const bucketKey = decodeURIComponent(url.pathname).slice(1);
+      const resp = await env.BUCKET.get(bucketKey);
 
       if (!resp) {
         return new Response('Font not found', { status: 404 });
@@ -161,7 +170,7 @@ export default {
       const o = resp as R2ObjectBody;
       const a = await o.arrayBuffer();
       const cacheableHeaders = new Headers();
-      cacheableHeaders.set('Cache-Control', `max-age=${env.CACHE_MAX_AGE || 86400}`);
+      cacheableHeaders.set('Cache-Control', CACHE_CONTROL_HEADER);
       cacheableHeaders.set('Content-Type', 'application/x-protobuf');
       // pregzipped
       cacheableHeaders.set('Content-Encoding', 'gzip');
@@ -175,20 +184,11 @@ export default {
     if (ok) {
       const cached = await cache.match(request.url);
       if (cached) {
-        const respHeaders = new Headers(cached.headers);
-        if (allowedOrigin) respHeaders.set('Access-Control-Allow-Origin', allowedOrigin);
-        respHeaders.set('X-Worker-Cache', 'HIT');
-        respHeaders.set('Vary', 'Origin');
-
-        return new Response(cached.body, {
-          headers: respHeaders,
-          status: cached.status,
-        });
+        return cacheHitResponse(cached, allowedOrigin);
       }
 
       const cacheableHeaders = new Headers();
-      const source = new R2Source(env, name);
-      const p = new PMTiles(source, CACHE, nativeDecompress);
+      const p = getPMTiles(name);
       try {
         const pHeader = await p.getHeader();
 

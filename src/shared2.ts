@@ -176,7 +176,7 @@ async function defaultDecompress(buf: ArrayBuffer, compression: Compression): Pr
   if (compression === Compression.Gzip) {
     // biome-ignore lint: needed to detect DecompressionStream in browser+node+cloudflare workers
     if (typeof (globalThis as any).DecompressionStream === 'undefined') {
-      return decompressSync(new Uint8Array(buf));
+      return decompressSync(new Uint8Array(buf)).buffer as ArrayBuffer;
     }
     const stream = new Response(buf).body;
     if (!stream) {
@@ -539,9 +539,7 @@ async function getHeaderAndRoot(source: Source, decompress: DecompressFunc): Pro
     return [await v2.getHeader(source)];
   }
 
-  const headerData = resp.data.slice(0, HEADER_SIZE_BYTES);
-
-  const header = bytesToHeader(headerData, resp.etag);
+  const header = bytesToHeader(resp.data, resp.etag);
 
   // optimistically set the root directory
   // TODO check root bounds
@@ -563,10 +561,7 @@ async function getDirectory(source: Source, decompress: DecompressFunc, offset: 
   return directory;
 }
 
-interface ResolvedValue {
-  lastUsed: number;
-  data: Header | Entry[] | ArrayBuffer;
-}
+type ResolvedData = Header | Entry[] | ArrayBuffer;
 
 /**
  * A cache for parts of a PMTiles archive where promises are never shared between requests.
@@ -576,9 +571,8 @@ interface ResolvedValue {
  * Only caches headers and directories, not individual tile contents.
  */
 export class ResolvedValueCache {
-  cache: Map<string, ResolvedValue>;
+  cache: Map<string, ResolvedData>;
   maxCacheEntries: number;
-  counter: number;
   decompress: DecompressFunc;
 
   constructor(
@@ -586,51 +580,45 @@ export class ResolvedValueCache {
     prefetch = true, // deprecated
     decompress: DecompressFunc = defaultDecompress,
   ) {
-    this.cache = new Map<string, ResolvedValue>();
+    this.cache = new Map<string, ResolvedData>();
     this.maxCacheEntries = maxCacheEntries;
-    this.counter = 1;
     this.decompress = decompress;
+  }
+
+  private touch(key: string, value: ResolvedData) {
+    // Re-insert to bump the entry to most-recently-used position.
+    this.cache.delete(key);
+    this.cache.set(key, value);
   }
 
   async getHeader(source: Source): Promise<Header> {
     const cacheKey = source.getKey();
-    const cacheValue = this.cache.get(cacheKey);
-    if (cacheValue) {
-      cacheValue.lastUsed = this.counter++;
-      const data = cacheValue.data;
-      return data as Header;
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      this.touch(cacheKey, cached);
+      return cached as Header;
     }
 
     const res = await getHeaderAndRoot(source, this.decompress);
     if (res[1]) {
-      this.cache.set(res[1][0], {
-        lastUsed: this.counter++,
-        data: res[1][2],
-      });
+      this.cache.set(res[1][0], res[1][2] as ResolvedData);
     }
 
-    this.cache.set(cacheKey, {
-      lastUsed: this.counter++,
-      data: res[0],
-    });
+    this.cache.set(cacheKey, res[0]);
     this.prune();
     return res[0];
   }
 
   async getDirectory(source: Source, offset: number, length: number, header: Header): Promise<Entry[]> {
     const cacheKey = `${source.getKey()}|${header.etag || ''}|${offset}|${length}`;
-    const cacheValue = this.cache.get(cacheKey);
-    if (cacheValue) {
-      cacheValue.lastUsed = this.counter++;
-      const data = cacheValue.data;
-      return data as Entry[];
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      this.touch(cacheKey, cached);
+      return cached as Entry[];
     }
 
     const directory = await getDirectory(source, this.decompress, offset, length, header);
-    this.cache.set(cacheKey, {
-      lastUsed: this.counter++,
-      data: directory,
-    });
+    this.cache.set(cacheKey, directory);
     this.prune();
     return directory;
   }
@@ -638,36 +626,23 @@ export class ResolvedValueCache {
   // for v2 backwards compatibility
   async getArrayBuffer(source: Source, offset: number, length: number, header: Header): Promise<ArrayBuffer> {
     const cacheKey = `${source.getKey()}|${header.etag || ''}|${offset}|${length}`;
-    const cacheValue = this.cache.get(cacheKey);
-    if (cacheValue) {
-      cacheValue.lastUsed = this.counter++;
-      const data = await cacheValue.data;
-      return data as ArrayBuffer;
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      this.touch(cacheKey, cached);
+      return cached as ArrayBuffer;
     }
 
     const resp = await source.getBytes(offset, length, undefined, header.etag);
-
-    this.cache.set(cacheKey, {
-      lastUsed: this.counter++,
-      data: resp.data,
-    });
+    this.cache.set(cacheKey, resp.data);
     this.prune();
     return resp.data;
   }
 
   prune() {
-    if (this.cache.size > this.maxCacheEntries) {
-      let minUsed = Infinity;
-      let minKey = undefined;
-      this.cache.forEach((cacheValue: ResolvedValue, key: string) => {
-        if (cacheValue.lastUsed < minUsed) {
-          minUsed = cacheValue.lastUsed;
-          minKey = key;
-        }
-      });
-      if (minKey) {
-        this.cache.delete(minKey);
-      }
+    while (this.cache.size > this.maxCacheEntries) {
+      const lru = this.cache.keys().next().value;
+      if (lru === undefined) break;
+      this.cache.delete(lru);
     }
   }
 
@@ -676,10 +651,7 @@ export class ResolvedValueCache {
   }
 }
 
-interface SharedPromiseCacheValue {
-  lastUsed: number;
-  data: Promise<Header | Entry[] | ArrayBuffer>;
-}
+type SharedPromiseData = Promise<Header | Entry[] | ArrayBuffer>;
 
 /**
  * A cache for parts of a PMTiles archive where promises can be shared between requests.
@@ -687,10 +659,9 @@ interface SharedPromiseCacheValue {
  * Only caches headers and directories, not individual tile contents.
  */
 export class SharedPromiseCache {
-  cache: Map<string, SharedPromiseCacheValue>;
+  cache: Map<string, SharedPromiseData>;
   invalidations: Map<string, Promise<void>>;
   maxCacheEntries: number;
-  counter: number;
   decompress: DecompressFunc;
 
   constructor(
@@ -698,30 +669,30 @@ export class SharedPromiseCache {
     prefetch = true, // deprecated
     decompress: DecompressFunc = defaultDecompress,
   ) {
-    this.cache = new Map<string, SharedPromiseCacheValue>();
+    this.cache = new Map<string, SharedPromiseData>();
     this.invalidations = new Map<string, Promise<void>>();
     this.maxCacheEntries = maxCacheEntries;
-    this.counter = 1;
     this.decompress = decompress;
+  }
+
+  private touch(key: string, value: SharedPromiseData) {
+    this.cache.delete(key);
+    this.cache.set(key, value);
   }
 
   async getHeader(source: Source): Promise<Header> {
     const cacheKey = source.getKey();
-    const cacheValue = this.cache.get(cacheKey);
-    if (cacheValue) {
-      cacheValue.lastUsed = this.counter++;
-      const data = await cacheValue.data;
-      return data as Header;
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      this.touch(cacheKey, cached);
+      return (await cached) as Header;
     }
 
     const p = new Promise<Header>((resolve, reject) => {
       getHeaderAndRoot(source, this.decompress)
         .then((res) => {
           if (res[1]) {
-            this.cache.set(res[1][0], {
-              lastUsed: this.counter++,
-              data: Promise.resolve(res[1][2]),
-            });
+            this.cache.set(res[1][0], Promise.resolve(res[1][2]) as SharedPromiseData);
           }
           resolve(res[0]);
           this.prune();
@@ -730,17 +701,16 @@ export class SharedPromiseCache {
           reject(e);
         });
     });
-    this.cache.set(cacheKey, { lastUsed: this.counter++, data: p });
+    this.cache.set(cacheKey, p);
     return p;
   }
 
   async getDirectory(source: Source, offset: number, length: number, header: Header): Promise<Entry[]> {
     const cacheKey = `${source.getKey()}|${header.etag || ''}|${offset}|${length}`;
-    const cacheValue = this.cache.get(cacheKey);
-    if (cacheValue) {
-      cacheValue.lastUsed = this.counter++;
-      const data = await cacheValue.data;
-      return data as Entry[];
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      this.touch(cacheKey, cached);
+      return (await cached) as Entry[];
     }
 
     const p = new Promise<Entry[]>((resolve, reject) => {
@@ -753,18 +723,17 @@ export class SharedPromiseCache {
           reject(e);
         });
     });
-    this.cache.set(cacheKey, { lastUsed: this.counter++, data: p });
+    this.cache.set(cacheKey, p);
     return p;
   }
 
   // for v2 backwards compatibility
   async getArrayBuffer(source: Source, offset: number, length: number, header: Header): Promise<ArrayBuffer> {
     const cacheKey = `${source.getKey()}|${header.etag || ''}|${offset}|${length}`;
-    const cacheValue = this.cache.get(cacheKey);
-    if (cacheValue) {
-      cacheValue.lastUsed = this.counter++;
-      const data = await cacheValue.data;
-      return data as ArrayBuffer;
+    const cached = this.cache.get(cacheKey);
+    if (cached) {
+      this.touch(cacheKey, cached);
+      return (await cached) as ArrayBuffer;
     }
 
     const p = new Promise<ArrayBuffer>((resolve, reject) => {
@@ -772,31 +741,21 @@ export class SharedPromiseCache {
         .getBytes(offset, length, undefined, header.etag)
         .then((resp) => {
           resolve(resp.data);
-          if (this.cache.has(cacheKey)) {
-          }
           this.prune();
         })
         .catch((e) => {
           reject(e);
         });
     });
-    this.cache.set(cacheKey, { lastUsed: this.counter++, data: p });
+    this.cache.set(cacheKey, p);
     return p;
   }
 
   prune() {
-    if (this.cache.size >= this.maxCacheEntries) {
-      let minUsed = Infinity;
-      let minKey = undefined;
-      this.cache.forEach((cacheValue: SharedPromiseCacheValue, key: string) => {
-        if (cacheValue.lastUsed < minUsed) {
-          minUsed = cacheValue.lastUsed;
-          minKey = key;
-        }
-      });
-      if (minKey) {
-        this.cache.delete(minKey);
-      }
+    while (this.cache.size > this.maxCacheEntries) {
+      const lru = this.cache.keys().next().value;
+      if (lru === undefined) break;
+      this.cache.delete(lru);
     }
   }
 
