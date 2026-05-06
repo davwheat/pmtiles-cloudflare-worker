@@ -274,7 +274,7 @@ async function getZxy(
 
     const view = new DataView(tileData);
     if (view.getUint8(0) === 0x1f && view.getUint8(1) === 0x8b) {
-      tileData = decompressSync(new Uint8Array(tileData));
+      tileData = decompressSync(new Uint8Array(tileData)).buffer as ArrayBuffer;
     }
 
     return {
@@ -298,7 +298,7 @@ async function getZxy(
 
         const view = new DataView(tileData);
         if (view.getUint8(0) === 0x1f && view.getUint8(1) === 0x8b) {
-          tileData = decompressSync(new Uint8Array(tileData));
+          tileData = decompressSync(new Uint8Array(tileData)).buffer as ArrayBuffer;
         }
         return {
           data: tileData,

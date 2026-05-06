@@ -151,13 +151,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@cloudflare/workers-types@npm:^4.20260506.1":
-  version: 4.20260506.1
-  resolution: "@cloudflare/workers-types@npm:4.20260506.1"
-  checksum: 10c0/71e22ff760d7e5f30ae20061a7b40e0ea38b09b3ca9c5fbf8a384bfa209f5fb0f3f4b16f0b84a496fadb0853dfa993fcd763cc5c8dc0da6a524196c740d989d3
-  languageName: node
-  linkType: hard
-
 "@cspotcode/source-map-support@npm:0.8.1":
   version: 0.8.1
   resolution: "@cspotcode/source-map-support@npm:0.8.1"
@@ -1736,7 +1729,6 @@ __metadata:
   resolution: "pmtiles-cloudflare@workspace:."
   dependencies:
     "@biomejs/biome": "npm:^1.9.4"
-    "@cloudflare/workers-types": "npm:^4.20260506.1"
     "@types/leaflet": "npm:^1.9.21"
     fflate: "npm:^0.8.2"
     prettier: "npm:^3.8.3"
