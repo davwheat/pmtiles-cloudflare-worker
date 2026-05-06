@@ -210,6 +210,7 @@ export default {
           [TileType.Jpeg, 'jpg'],
           [TileType.Webp, 'webp'],
           [TileType.Avif, 'avif'],
+          [TileType.Mlt, 'mlt'],
         ]) {
           if (pHeader.tileType === pair[0] && ext !== pair[1]) {
             if (pHeader.tileType === TileType.Mvt && ext === 'pbf') {
@@ -234,6 +235,12 @@ export default {
             break;
           case TileType.Webp:
             cacheableHeaders.set('Content-Type', 'image/webp');
+            break;
+          case TileType.Avif:
+            cacheableHeaders.set('Content-Type', 'image/avif');
+            break;
+          case TileType.Mlt:
+            cacheableHeaders.set('Content-Type', 'application/vnd.maplibre-tile');
             break;
         }
 
